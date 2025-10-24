@@ -36,17 +36,19 @@ jobs:
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 . 
 
-      # 🛑 CRITICAL FIX: Use the correct, general ZAP action: zaproxy/zap-action
+      # 🛑 CRITICAL FIX: Use the existing action (action-baseline) but override its command
       - name: Run ZAP Automation Scan (using zap_scan.yml)
         id: zap
-        # Use the general ZAP action for running automation
-        uses: zaproxy/zap-action@v0.11.0 
+        # Use the action that is confirmed to exist
+        uses: zaproxy/action-baseline@v0.11.0 
         with:
-          # Use the 'docker_name' parameter to point the ZAP container to the automation file.
-          # The path is relative to the workspace, mapped into the container at /zap/wrk/
-          docker_name: 'zap-automation-framework -autorun /zap/wrk/zap_scan.yml' 
-          # We use this parameter for the artifact name override (the final attempt to fix the original bug)
+          target: 'http://localhost:8080' 
+          # Override the default zap-baseline.py with the -autorun command
+          cmd_options: '-autorun /zap/wrk/zap_scan.yml'
+          # Use a valid, hyphenated name for the artifact
           artifact_name: 'zap-reports' 
+          # Ensure you use your rules_file_name to point to the file in the ZAP container's workspace
+          rules_file_name: 'zap_scan.yml' 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # Keep continue-on-error as the final, absolute workaround for the artifact bug
@@ -57,7 +59,7 @@ jobs:
         # Ensures this runs even if Step 4 fails due to the artifact bug
         if: always()
         run: |
-          # The zap_scan.yml reports to /zap/wrk/zap_results/zap_report.json 
+          # Your zap_scan.yml reports to /zap/wrk/zap_results/zap_report.json 
           # which maps to the runner's workspace: zap_results/zap_report.json
           
           # Ensure permissions are correct on the subdirectory created by the ZAP container
@@ -76,3 +78,4 @@ jobs:
           name: "zap-reports-manual"
           path: "zap_results/"
           retention-days: 7
+          
