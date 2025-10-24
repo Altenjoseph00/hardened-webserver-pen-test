@@ -1,4 +1,4 @@
-name: Security Scan
+name: Hardened Webserver Security Scan
 
 on:
   push:
@@ -6,7 +6,9 @@ on:
   pull_request:
 
 jobs:
-  zap_scan:
+  # FIX 1: Change job ID to a valid name (zap-scan) to prevent ZAP action's fallback error
+  zap-scan: 
+    name: Run ZAP Baseline Scan
     runs-on: ubuntu-latest
 
     steps:
@@ -31,8 +33,12 @@ jobs:
             fi
             echo "⏳ Waiting for app..."; sleep 2
           done
+          
+      # FIX 2: Set Permissions for ZAP Output Directory (Addresses the [Errno 13] Permission denied error)
+      - name: Set ZAP Output Permissions
+        run: sudo chmod -R 777 . 
 
-      # Step 4: Run OWASP ZAP Baseline Scan (Updated syntax)
+      # Step 4: Run OWASP ZAP Baseline Scan 
       - name: Run OWASP ZAP Baseline Scan
         id: zap
         uses: zaproxy/action-baseline@v0.11.0
@@ -41,7 +47,7 @@ jobs:
           rules_file_name: ''
           cmd_options: '-a'
           allow_issue_writing: false
-          #artifact_name: 'zap-results'
+          # artifact_name is correctly removed to avoid automatic upload failure
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -50,12 +56,13 @@ jobs:
         run: |
           mkdir -p zap_results
           echo "📄 Copying reports from ZAP container..."
-          docker cp $(docker ps -a -q --filter "ancestor=owasp/zap2docker-stable" --latest):/zap/wrk/zap_report.html zap_results/ || true
-          docker cp $(docker ps -a -q --filter "ancestor=owasp/zap2docker-stable" --latest):/zap/wrk/zap_report.json zap_results/ || true
+          # Assuming the ZAP action's reports are named report_json.json and report_html.html
+          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_html.html zap_results/ || true
+          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_json.json zap_results/ || true
           echo "✅ Reports copied successfully"
           ls -la zap_results
-
-      # Step 6: Verify report directory (prevents artifact upload error)
+          
+      # Step 6: Verify report directory 
       - name: Verify report directory
         run: |
           if [ ! -d "zap_results" ] || [ -z "$(ls -A zap_results)" ]; then
@@ -64,7 +71,7 @@ jobs:
           fi
           echo "✅ Verified ZAP results exist."
 
-      # Step 7: Upload ZAP results as GitHub artifact
+      # Step 7: Upload ZAP results as GitHub artifact 
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
@@ -76,4 +83,5 @@ jobs:
       - name: Run remediation scoring
         run: |
           echo " Running ZAP remediation scoring..."
+          # Ensure python3 is used as in the previous run log
           python3 zap_score_calculator.py zap_results/zap_report.json || echo " Scoring script failed but continuing."
