@@ -6,25 +6,29 @@ on:
   pull_request:
 
 jobs:
-  # Job ID is correctly hyphenated (zap-scan)
+  # Job ID is correctly hyphenated
   zap-scan: 
     name: Run ZAP Baseline Scan
     runs-on: ubuntu-latest
 
     steps:
-      # Steps 1-3 are fine.
+      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Step 2: Build Docker app image (using your Dockerfile)
       - name: Build app image
         run: docker build -t myapp:test .
 
+      # Step 3: Run app container
       - name: Run app container
         run: |
+          # The app runs on port 80 internally, mapped to 8080 on the host
           docker rm -f myapp || true
           docker run -d --name myapp -p 8080:80 myapp:test
           echo "Waiting for app to start..."
           for i in {1..15}; do
+            # Check for success on the host port (8080)
             if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
               echo "✅ App is up and running"
               break
@@ -32,50 +36,47 @@ jobs:
             echo "⏳ Waiting for app..."; sleep 2
           done
           
-      # Permissions Fix (Confirmed working)
+      # Step 4: Set ZAP Output Permissions (Needed for volume mounts)
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 . 
 
-      # 🛑 CRITICAL FIX: Use the existing action (action-baseline) but override its command
-      - name: Run ZAP Automation Scan (using zap_scan.yml)
+      # 🛑 CRITICAL FIX: Run ZAP Automation Framework via a direct Docker command
+      - name: Run ZAP Automation Scan (Direct Docker)
         id: zap
-        # Use the action that is confirmed to exist
-        uses: zaproxy/action-baseline@v0.11.0 
-        with:
-          target: 'http://localhost:8080' 
-          # Override the default zap-baseline.py with the -autorun command
-          cmd_options: '-autorun /zap/wrk/zap_scan.yml'
-          # Use a valid, hyphenated name for the artifact
-          artifact_name: 'zap-reports' 
-          # Ensure you use your rules_file_name to point to the file in the ZAP container's workspace
-          rules_file_name: 'zap_scan.yml' 
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Keep continue-on-error as the final, absolute workaround for the artifact bug
-        continue-on-error: true 
+        run: |
+          echo "Pulling ZAP image..."
+          docker pull ghcr.io/zaproxy/zaproxy:stable -q
+          
+          echo "Running ZAP Automation Framework with zap_scan.yml..."
+          # The ZAP container runs 'zap.sh' which supports the '-autorun' flag
+          docker run \
+            # Mount current workspace as /zap/wrk/ for ZAP to read zap_scan.yml and write reports
+            -v /home/runner/work/hardened-webserver-pen-test/hardened-webserver-pen-test:/zap/wrk/:rw \
+            --network=host \
+            -t ghcr.io/zaproxy/zaproxy:stable \
+            zap.sh -autorun /zap/wrk/zap_scan.yml
+        # No 'continue-on-error' needed, as this is a pure command execution.
 
       # Step 5: Set Report Permissions and Run Scoring
       - name: Set Report Permissions and Run Scoring
-        # Ensures this runs even if Step 4 fails due to the artifact bug
-        if: always()
+        if: always() # Run regardless of ZAP scan outcome
         run: |
-          # Your zap_scan.yml reports to /zap/wrk/zap_results/zap_report.json 
-          # which maps to the runner's workspace: zap_results/zap_report.json
+          # Your zap_scan.yml writes reports to the zap_results/ folder in the workspace.
           
-          # Ensure permissions are correct on the subdirectory created by the ZAP container
+          # Ensure runner user can access files written by the non-root ZAP container user
           sudo chmod -R 777 zap_results || true
           
           # Run custom scoring script
           echo " Running ZAP remediation scoring..."
-          # The output path is relative to the workspace
+          # Scoring script uses the zap_report.json defined by your zap_scan.yml
           python3 zap_score_calculator.py zap_results/zap_report.json 
           
-      # Step 7: Upload ZAP results as GitHub artifact 
+      # Step 6: Upload ZAP results as GitHub artifact 
       - name: Upload ZAP Results Manually
-        if: always() # Runs regardless of previous step success/failure
+        if: always() # Run regardless of previous step success/failure
         uses: actions/upload-artifact@v4
         with:
-          name: "zap-reports-manual"
+          name: "zap-reports-final"
           path: "zap_results/"
           retention-days: 7
           
