@@ -25,20 +25,19 @@ jobs:
           docker run -d --name myapp -p 8080:80 myapp:test
           for i in {1..15}; do
             if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
-              echo " App is up"; break
+              echo "App is up"; break
             fi
-            echo " Waiting for app..."; sleep 2
+            echo "Waiting for app..."; sleep 2
           done
 
-      # Step 4: Run OWASP ZAP baseline scan (JSON output)
+      # Step 4: Run OWASP ZAP baseline scan (JSON output) – updated version
       - name: Run OWASP ZAP baseline
         id: zap
-        uses: zaproxy/action-baseline@v0.6.0
+        uses: zaproxy/action-baseline@v0.9.0
         with:
           target: 'http://localhost:8080'
           format: 'json'
-          failAction: 'true'
-          rules_file: ''
+          fail-on-risk: 'true'   # updated param name
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
