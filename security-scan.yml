@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Step 2: Build the Docker app image
+      # Step 2: Build Docker app image
       - name: Build app image
         run: docker build -t myapp:test .
 
@@ -25,9 +25,9 @@ jobs:
           docker run -d --name myapp -p 8080:80 myapp:test
           for i in {1..15}; do
             if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
-              echo "App is up"; break
+              echo " App is up"; break
             fi
-            echo "Waiting for app..."; sleep 2
+            echo " Waiting for app..."; sleep 2
           done
 
       # Step 4: Run OWASP ZAP baseline scan (JSON output)
@@ -42,26 +42,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 5: Save ZAP JSON report
-      - name: Save ZAP JSON report
+      # Step 5: Ensure ZAP report exists and move it to zap_results
+      - name: Prepare ZAP report
         run: |
           mkdir -p zap_results
           if [ -f zap_report.json ]; then
             mv zap_report.json zap_results/
           else
-            cp $(ls -1 *.json | head -n1) zap_results/zap_report.json || true
+            echo "❌ ZAP report not found! Listing any JSON files in root:"
+            ls -1 *.json || true
+            exit 1
           fi
 
-      # Step 6: Upload ZAP JSON artifact
+      # Step 6: Debug contents of zap_results
+      - name: Debug zap_results
+        run: ls -la zap_results
+
+      # Step 7: Upload ZAP JSON artifact
       - name: Upload ZAP JSON artifact
         uses: actions/upload-artifact@v4
         with:
           name: zap-report-json
           path: zap_results/
 
-      # Step 7: Run remediation scoring scripts
+      # Step 8: Run remediation scoring script
       - name: Run remediation scoring
-        run: |
-          ls -la zap_results || true
-          python3 zap_score_calculator.py zap_results/zap_report.json 80
+        run: python3 zap_score_calculator.py zap_results/zap_report.json
 
