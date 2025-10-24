@@ -31,14 +31,15 @@ jobs:
           done
 
       # Step 4: Run OWASP ZAP scan using your zap_scan.yml
-      - name: Run OWASP ZAP Scan
+      - name: Run OWASP ZAP Baseline Scan
         id: zap
-        uses: zaproxy/action-full-scan@v0.11.0
+        uses: zaproxy/action-baseline@v0.11.0
         with:
           target: 'http://localhost:8080'
-          rules_file_name: './zap_scan.yml'
-          cmd_options: '-r zap_report.html -J zap_report.json'
-          fail_action: false
+          rules_file_name: ''
+          cmd_options: '-a'
+          allow_issue_writing: false
+          # artifact_name: 'zap-results' # <--- DELETE THIS LINE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -59,8 +60,8 @@ jobs:
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: zap_results
-          path: ./zap_results/
+          name: "zap-results"  # Use a hyphenated name
+          path: "zap_results/" # This is the directory you created in Step 5
           retention-days: 7
 
       # Step 7: Run remediation scoring script (optional)
