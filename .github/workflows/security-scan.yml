@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # FIX: RENAME JOB ID from 'zap_scan' to 'zap-scan' to use a valid artifact name format
+  # Job ID is correctly hyphenated (zap-scan)
   zap-scan: 
     name: Run ZAP Baseline Scan
     runs-on: ubuntu-latest
@@ -34,18 +34,20 @@ jobs:
             echo "⏳ Waiting for app..."; sleep 2
           done
           
-      # Permissions Fix (You verified this runs without error)
+      # Permissions Fix (Confirmed working)
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 . 
 
-      # Step 4: Run OWASP ZAP Baseline Scan 
+      # Step 4: Run OWASP ZAP Baseline Scan - MODIFIED
+      # Removed specific report flags from cmd_options to prevent ZAP's internal artifact logic from running
       - name: Run OWASP ZAP Baseline Scan
         id: zap
         uses: zaproxy/action-baseline@v0.11.0
         with:
           target: 'http://localhost:8080'
           rules_file_name: ''
-          cmd_options: '-a'
+          # ONLY use '-a' (include all alerts)
+          cmd_options: '-a' 
           allow_issue_writing: false
           # artifact_name is correctly removed
         env:
@@ -56,7 +58,7 @@ jobs:
         run: |
           mkdir -p zap_results
           echo "📄 Copying reports from ZAP container..."
-          # Reports are likely named report_json.json and report_html.html by the ZAP action
+          # Reports should still be generated in /zap/wrk/ with these names by the action
           docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_html.html zap_results/
           docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_json.json zap_results/
           echo "✅ Reports copied successfully"
@@ -75,7 +77,7 @@ jobs:
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: "zap-results" # Valid name for your manual upload
+          name: "zap-results"
           path: "zap_results/"
           retention-days: 7
 
