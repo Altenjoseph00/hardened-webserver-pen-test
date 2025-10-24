@@ -6,13 +6,14 @@ env:
 
   parameters:
     failOnError: false
+    progressToStdout: true   # helpful for GitHub Action logs
 
 jobs:
   - type: spider
     name: "Spider website"
     parameters:
       context: "local-web-test"
-      maxDuration: 5   # increased duration
+      maxDuration: 5
 
   - type: activeScan
     name: "Active Scan"
@@ -23,6 +24,5 @@ jobs:
     name: "Generate HTML Report"
     parameters:
       template: traditional-html
-      reportDir: "./zap_results"
+      reportDir: "/zap/wrk/zap_results"
       reportFile: "zap_report.html"
-
