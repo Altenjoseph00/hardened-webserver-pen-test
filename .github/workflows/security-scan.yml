@@ -68,7 +68,7 @@ jobs:
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: "zap_results"
+          name: "zap-results"
           path: "zap_results/"
           retention-days: 7
 
