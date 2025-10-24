@@ -41,7 +41,7 @@ jobs:
           rules_file_name: ''
           cmd_options: '-a'
           allow_issue_writing: false
-          artifact_name: 'zap_results'
+          artifact_name: 'zap-results'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
