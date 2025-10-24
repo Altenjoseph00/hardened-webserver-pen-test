@@ -36,16 +36,16 @@ jobs:
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 . 
 
-      # 🛑 CRITICAL FIX: Use the correct ZAP action: zaproxy/action-scan-policy
+      # 🛑 CRITICAL FIX: Use the correct, general ZAP action: zaproxy/zap-action
       - name: Run ZAP Automation Scan (using zap_scan.yml)
         id: zap
-        # Use the correct action name for a policy/automation file
-        uses: zaproxy/action-scan-policy@v0.11.0 
+        # Use the general ZAP action for running automation
+        uses: zaproxy/zap-action@v0.11.0 
         with:
-          target: 'http://localhost:8080' # Target is required by this action
-          # Use the correct parameter to point to your automation YAML
-          rules_file_name: 'zap_scan.yml' 
-          # Use a valid, hyphenated name for the artifact
+          # Use the 'docker_name' parameter to point the ZAP container to the automation file.
+          # The path is relative to the workspace, mapped into the container at /zap/wrk/
+          docker_name: 'zap-automation-framework -autorun /zap/wrk/zap_scan.yml' 
+          # We use this parameter for the artifact name override (the final attempt to fix the original bug)
           artifact_name: 'zap-reports' 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,6 +54,7 @@ jobs:
 
       # Step 5: Set Report Permissions and Run Scoring
       - name: Set Report Permissions and Run Scoring
+        # Ensures this runs even if Step 4 fails due to the artifact bug
         if: always()
         run: |
           # The zap_scan.yml reports to /zap/wrk/zap_results/zap_report.json 
@@ -69,10 +70,9 @@ jobs:
           
       # Step 7: Upload ZAP results as GitHub artifact 
       - name: Upload ZAP Results Manually
-        if: always()
+        if: always() # Runs regardless of previous step success/failure
         uses: actions/upload-artifact@v4
         with:
           name: "zap-reports-manual"
           path: "zap_results/"
           retention-days: 7
-          
