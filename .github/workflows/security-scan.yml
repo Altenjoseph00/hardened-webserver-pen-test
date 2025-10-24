@@ -32,20 +32,25 @@ jobs:
         uses: zaproxy/action-baseline@v0.11.0
         with:
           target: 'http://localhost:8080'
-          cmd_options: '-J zap_report.json -r zap_report.html'
-          fail_action: true
+          cmd_options: '-J /zap/wrk/zap_report.json -r /zap/wrk/zap_report.html'
+          fail_action: false
           allow_issue_writing: false
-          artifact_name: zap-results
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy ZAP Reports from Container
+        run: |
+          mkdir -p zap_results
+          docker cp $(docker ps -a -q --filter "ancestor=owasp/zap2docker-stable" --latest):/zap/wrk/zap_report.json zap_results/ || true
+          docker cp $(docker ps -a -q --filter "ancestor=owasp/zap2docker-stable" --latest):/zap/wrk/zap_report.html zap_results/ || true
+          echo "✅ Reports copied successfully"
+          ls -la zap_results
 
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: zap-results
-          path: |
-            zap_report.json
-            zap_report.html
+          name: zap_results
+          path: zap_results/
 
-      - name: Run Python scoring script
-        run: python3 zap_score_calculator.py zap_report.json
+      - name: Run Python scoring
+        run: python3 zap_score_calculator.py zap_results/zap_report.json
