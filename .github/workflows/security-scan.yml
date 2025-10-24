@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # FIX 1: Change job ID to a valid name (zap-scan) to prevent ZAP action's fallback error
+  # FIX: RENAME JOB ID from 'zap_scan' to 'zap-scan' to use a valid artifact name format
   zap-scan: 
     name: Run ZAP Baseline Scan
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
             echo "⏳ Waiting for app..."; sleep 2
           done
           
-      # FIX 2: Set Permissions for ZAP Output Directory (Addresses the [Errno 13] Permission denied error)
+      # Permissions Fix (You verified this runs without error)
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 . 
 
@@ -47,7 +47,7 @@ jobs:
           rules_file_name: ''
           cmd_options: '-a'
           allow_issue_writing: false
-          # artifact_name is correctly removed to avoid automatic upload failure
+          # artifact_name is correctly removed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -56,9 +56,9 @@ jobs:
         run: |
           mkdir -p zap_results
           echo "📄 Copying reports from ZAP container..."
-          # Assuming the ZAP action's reports are named report_json.json and report_html.html
-          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_html.html zap_results/ || true
-          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_json.json zap_results/ || true
+          # Reports are likely named report_json.json and report_html.html by the ZAP action
+          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_html.html zap_results/
+          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_json.json zap_results/
           echo "✅ Reports copied successfully"
           ls -la zap_results
           
@@ -75,7 +75,7 @@ jobs:
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: "zap-results"
+          name: "zap-results" # Valid name for your manual upload
           path: "zap_results/"
           retention-days: 7
 
@@ -83,5 +83,4 @@ jobs:
       - name: Run remediation scoring
         run: |
           echo " Running ZAP remediation scoring..."
-          # Ensure python3 is used as in the previous run log
           python3 zap_score_calculator.py zap_results/zap_report.json || echo " Scoring script failed but continuing."
