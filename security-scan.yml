@@ -9,34 +9,39 @@ jobs:
   build_and_scan:
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Checkout the repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Step 2: Build the Docker image
       - name: Build app image
         run: docker build -t myapp:test .
 
+      # Step 3: Run the app container
       - name: Run app container
         run: |
           docker rm -f myapp || true
           docker run -d --name myapp -p 8080:80 myapp:test
+          # Wait until the app is up
           for i in {1..15}; do
             if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
-              echo "app is up"; break
+              echo "App is up"; break
             fi
-            echo "waiting for app..."; sleep 2
+            echo "Waiting for app..."; sleep 2
           done
 
-      - name: Run OWASP ZAP baseline (JSON)
+      # Step 4: Run OWASP ZAP baseline scan (JSON format)
+      - name: Run OWASP ZAP baseline
         id: zap
         uses: zaproxy/action-baseline@v0.6.0
         with:
           target: 'http://localhost:8080'
           format: 'json'
           failAction: 'true'
-          rules_file: ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Step 5: Save ZAP JSON report
       - name: Save ZAP JSON report
         run: |
           mkdir -p zap_results
@@ -46,13 +51,18 @@ jobs:
             cp $(ls -1 *.json | head -n1) zap_results/zap_report.json || true
           fi
 
+      # Step 6: Upload ZAP JSON artifact for review
       - name: Upload ZAP JSON artifact
         uses: actions/upload-artifact@v4
         with:
           name: zap-report-json
           path: zap_results/zap_report.json
 
-      - name: Run remediation scoring
-        run: |
-          ls -la zap_results || true
-          python3 zap_score_calculator.py zap_results/zap_report.json 80
+      # Step 7: Run remediation scoring
+      - name: Run ZAP Risk Score Calculator
+        run: python3 zap_score_calculator.py zap_results/zap_report.json 2
+
+      # Step 8: Stop and remove the container
+      - name: Stop app container
+        run: docker rm -f myapp || true
+
