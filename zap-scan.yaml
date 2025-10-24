@@ -2,7 +2,8 @@ env:
   contexts:
     - name: "local-web-test"
       urls:
-        - "http://localhost/test/"
+        - "http://localhost:8080/"   # match Docker container port
+
   parameters:
     failOnError: false
 
@@ -11,14 +12,17 @@ jobs:
     name: "Spider website"
     parameters:
       context: "local-web-test"
-      maxDuration: 1
+      maxDuration: 1   # in minutes
+
   - type: activeScan
     name: "Active Scan"
     parameters:
       context: "local-web-test"
+
   - type: report
     name: "Generate HTML Report"
     parameters:
       template: traditional-html
-      reportDir: "~/hardened-webserver-project"
+      reportDir: "/home/seed/hardened-webserver-project"   # use absolute path
       reportFile: "zap_report.html"
+
