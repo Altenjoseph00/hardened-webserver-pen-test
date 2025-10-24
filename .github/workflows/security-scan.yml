@@ -4,35 +4,48 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   zap_scan:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Start Python webserver
+      - name: Build app image
+        run: docker build -t myapp:test .
+
+      - name: Run app container
         run: |
-          python3 -m http.server 8000 &
-          sleep 5
+          docker rm -f myapp || true
+          docker run -d --name myapp -p 8080:80 myapp:test
+          for i in {1..15}; do
+            if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
+              echo "✅ App is up"; break
+            fi
+            echo "⏳ Waiting for app..."; sleep 2
+          done
 
       - name: Run OWASP ZAP Baseline Scan
+        id: zap
         uses: zaproxy/action-baseline@v0.11.0
         with:
-          target: "http://localhost:8000"
-          cmd_options: "-I"
-          report_file: "zap_report.json"
+          target: 'http://localhost:8080'
+          cmd_options: '-J zap_report.json -r zap_report.html'
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload ZAP Report
+      - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: zap_report
-          path: zap_report.json
+          name: zap-results
+          path: |
+            zap_report.json
+            zap_report.html
 
-      - name: Calculate Security Score
-        run: |
-          pip install --quiet jq
-          python3 zap_score_calculator.py zap_report.json
+      - name: Run Python scoring script
+        run: python3 zap_score_calculator.py zap_report.json
