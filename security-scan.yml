@@ -59,7 +59,7 @@ jobs:
           name: zap-report-json
           path: zap_results/
 
-      # Step 7: Run remediation scoring script
+      # Step 7: Run remediation scoring scripts
       - name: Run remediation scoring
         run: |
           ls -la zap_results || true
