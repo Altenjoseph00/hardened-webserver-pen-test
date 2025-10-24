@@ -34,7 +34,7 @@ jobs:
       # Step 4: Run OWASP ZAP Baseline Scan (JSON + HTML reports)
       - name: Run OWASP ZAP baseline scan
         id: zap
-        uses: zaproxy/action-baseline@v0.9.0
+        uses: zaproxy/action-baseline@v0.10.0
         with:
           target: 'http://localhost:8080'
           format: 'json'
@@ -56,7 +56,7 @@ jobs:
 
       # Step 6: Upload ZAP report artifacts (latest version)
       - name: Upload ZAP report artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: zap-reports
           path: zap_results/
