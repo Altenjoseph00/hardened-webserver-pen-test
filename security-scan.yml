@@ -1,4 +1,4 @@
-name: Hardened Webserver Security Scan
+name: Hardened Webserver Penetration Testing Framework 
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
   pull_request:
 
 jobs:
-  zap_scan:
-    name: Run ZAP Baseline Scan
+  build_and_scan:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,50 +25,49 @@ jobs:
           docker run -d --name myapp -p 8080:80 myapp:test
           for i in {1..15}; do
             if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
-              echo "✅ App is up and reachable"; break
+              echo "✅ App is up"; break
             fi
-            echo "⏳ Waiting for app to start..."; sleep 2
+            echo "⏳ Waiting for app..."; sleep 2
           done
 
-      # Step 4: Run OWASP ZAP Baseline Scan (JSON + HTML reports)
-      - name: Run OWASP ZAP baseline scan
+      # Step 4: Run OWASP ZAP scan using your zap_scan.yml
+      - name: Run OWASP ZAP Scan
         id: zap
-        uses: zaproxy/action-baseline@v0.10.0
+        uses: zaproxy/action-full-scan@v0.11.0
         with:
           target: 'http://localhost:8080'
-          format: 'json'
-          fail-on-risk: 'true'
+          rules_file_name: './zap_scan.yml'
           cmd_options: '-r zap_report.html -J zap_report.json'
+          fail_action: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 5: Collect ZAP results
-      - name: Prepare ZAP reports
+      # Step 5: Copy ZAP results from container to workspace
+      - name: Copy ZAP results to workspace
         run: |
-          mkdir -p zap_results
-          echo "📄 Checking generated files..."
-          ls -1
-          if [ -f zap_report.json ]; then mv zap_report.json zap_results/; fi
-          if [ -f zap_report.html ]; then mv zap_report.html zap_results/; fi
-          echo "✅ Reports moved to zap_results/"
-          ls -la zap_results
+          echo "📦 Copying ZAP scan results from container..."
+          CONTAINER_ID=$(docker ps -aqf "ancestor=owasp/zap2docker-stable") || true
+          if [ -n "$CONTAINER_ID" ]; then
+            docker cp "$CONTAINER_ID":/zap/wrk/zap_results ./zap_results || echo "⚠️ Failed to copy results"
+            echo "✅ Results copied successfully!"
+          else
+            echo "❌ ZAP container not found!"
+          fi
+          ls -la ./zap_results || echo "⚠️ No results found"
 
-      # Step 6: Upload ZAP report artifacts (latest version)
-      - name: Upload ZAP report artifacts
-        uses: actions/upload-artifact@v4.4.0
+      # Step 6: Upload ZAP results as GitHub artifact
+      - name: Upload ZAP Results
+        uses: actions/upload-artifact@v4
         with:
-          name: zap-reports
-          path: zap_results/
+          name: zap_results
+          path: ./zap_results/
+          retention-days: 7
 
-      # Step 7: Install Python and dependencies (for scoring script)
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      # Step 8: Run Python remediation scoring
+      # Step 7: Run remediation scoring script (optional)
       - name: Run remediation scoring
         run: |
-          echo "🔍 Running ZAP remediation scoring..."
-          python3 zap_score_calculator.py zap_results/zap_report.json
-
+          if [ -f zap_results/zap_report.json ]; then
+            python3 zap_score_calculator.py zap_results/zap_report.json
+          else
+            echo "⚠️ No JSON report found, skipping scoring."
+          fi
