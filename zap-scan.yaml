@@ -1,0 +1,24 @@
+env:
+  contexts:
+    - name: "local-web-test"
+      urls:
+        - "http://localhost/test/"
+  parameters:
+    failOnError: false
+
+jobs:
+  - type: spider
+    name: "Spider website"
+    parameters:
+      context: "local-web-test"
+      maxDuration: 1
+  - type: activeScan
+    name: "Active Scan"
+    parameters:
+      context: "local-web-test"
+  - type: report
+    name: "Generate HTML Report"
+    parameters:
+      template: traditional-html
+      reportDir: "~/hardened-webserver-project"
+      reportFile: "zap_report.html"
