@@ -7,7 +7,7 @@ on:
 
 jobs:
   zapscan:
-    name: Run ZAP Baseline Scan
+    name: Run OWASP ZAP Security Scan
     runs-on: ubuntu-latest
 
     steps:
@@ -30,39 +30,39 @@ jobs:
               echo "✅ App is up and running"
               break
             fi
-            echo "Waiting..."; sleep 2
+            echo "Waiting for app..."; sleep 2
           done
 
-      # Step 4: Fix permissions
+      # Step 4: Set permissions to avoid container mount issues
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 .
 
-      # Step 5: Run OWASP ZAP Baseline Scan
+      # Step 5: Run OWASP ZAP Baseline Scan (Docker Direct)
       - name: Run OWASP ZAP Baseline Scan
-        id: zap
-        uses: zaproxy/action-baseline@v0.11.0
-        with:
-          target: 'http://localhost:8080'
-          rules_file_name: ''
-          cmd_options: '-a'
-          allow_issue_writing: false
-          artifact_name: ''
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-
-      # Step 6: Collect ZAP reports (directly from workspace)
-      - name: Collect ZAP reports
         run: |
+          echo "⚡ Starting OWASP ZAP Baseline Scan..."
           mkdir -p zap_results
-          echo "📄 Collecting ZAP reports..."
-          cp -v *.html zap_results/ || true
-          cp -v *.json zap_results/ || true
-          echo "✅ Reports moved to zap_results/"
-          ls -la zap_results
+          docker run --rm \
+            --network host \
+            -v "$(pwd)/zap_results:/zap/wrk/" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://localhost:8080 \
+              -a \
+              -r zap_report.html \
+              -J zap_report.json
+          echo "✅ ZAP scan completed successfully."
 
-      # Step 7: Upload ZAP results as GitHub artifact
+      # Step 6: Verify reports exist
+      - name: Verify ZAP results
+        run: |
+          if [ ! -f "zap_results/zap_report.html" ] || [ ! -f "zap_results/zap_report.json" ]; then
+            echo "❌ ZAP reports not found!"
+            exit 1
+          fi
+          echo "✅ Verified ZAP results generated successfully."
+
+      # Step 7: Upload ZAP Results as GitHub artifact
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
@@ -70,12 +70,8 @@ jobs:
           path: zap_results/
           retention-days: 7
 
-      # Step 8: Run custom remediation scoring
-      - name: Run remediation scoring
+      # Step 8: Optional - Run remediation scoring
+      - name: Run Remediation Scoring
         run: |
-          echo "Running ZAP remediation scoring..."
-          if [ -f zap_results/zap_report.json ]; then
-            python3 zap_score_calculator.py zap_results/zap_report.json
-          else
-            echo "⚠️ zap_report.json not found, skipping scoring."
-          fi
+          echo "🧮 Running custom remediation scoring..."
+          python3 zap_score_calculator.py zap_results/zap_report.json || echo "⚠️ Scoring script failed but continuing."
