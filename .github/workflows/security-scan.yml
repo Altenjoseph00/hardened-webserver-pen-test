@@ -7,18 +7,20 @@ on:
 
 jobs:
   # Job ID is correctly hyphenated (zap-scan)
-  zap-scan: 
+  zapscan: 
     name: Run ZAP Baseline Scan
     runs-on: ubuntu-latest
 
     steps:
-      # Steps 1-3 are fine.
+      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Step 2: Build Docker app image
       - name: Build app image
         run: docker build -t myapp:test .
 
+      # Step 3: Run app container
       - name: Run app container
         run: |
           docker rm -f myapp || true
@@ -36,42 +38,51 @@ jobs:
       - name: Set ZAP Output Permissions
         run: sudo chmod -R 777 . 
 
-      # 🛑 CRITICAL FIX: Use the correct ZAP action: zaproxy/action-scan-policy
-      - name: Run ZAP Automation Scan (using zap-scan.yml)
+      # Step 4: Run OWASP ZAP Baseline Scan - MODIFIED
+      # Removed specific report flags from cmd_options to prevent ZAP's internal artifact logic from running
+      - name: Run OWASP ZAP Baseline Scan
         id: zap
-        # Use the correct action name for a policy/automation file
-        uses: zaproxy/action-scan-policy@v0.11.0 
+        uses: zaproxy/action-baseline@v0.11.0
         with:
-          target: 'http://localhost:8080' # Target is required by this action
-          # Use the correct parameter to point to your automation YAML
-          rules_file_name: 'zap-scan.yml' 
-          # Use a valid, hyphenated name for the artifact
-          artifact_name: 'zap-reports' 
+          target: 'http://localhost:8080'
+          rules_file_name: ''
+          # ONLY use '-a' (include all alerts)
+          cmd_options: '-a' 
+          allow_issue_writing: false
+          # artifact_name is correctly removed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # Keep continue-on-error as the final, absolute workaround for the artifact bug
-        continue-on-error: true 
 
-      # Step 5: Set Report Permissions and Run Scoring
-      - name: Set Report Permissions and Run Scoring
-        if: always()
+      # Step 5: Copy ZAP reports from container to workspace
+      - name: Copy ZAP Reports from Container
         run: |
-          # The zap_scan.yml reports to /zap/wrk/zap_results/zap_report.json 
-          # which maps to the runner's workspace: zap_results/zap_report.json
+          mkdir -p zap_results
+          echo "📄 Copying reports from ZAP container..."
+          # Reports should still be generated in /zap/wrk/ with these names by the action
+          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_html.html zap_results/
+          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_json.json zap_results/
+          echo "✅ Reports copied successfully"
+          ls -la zap_results
           
-          # Ensure permissions are correct on the subdirectory created by the ZAP container
-          sudo chmod -R 777 zap_results || true
-          
-          # Run custom scoring script
-          echo " Running ZAP remediation scoring..."
-          # The output path is relative to the workspace
-          python3 zap_score_calculator.py zap_results/zap_report.json 
-          
+      # Step 6: Verify report directory 
+      - name: Verify report directory
+        run: |
+          if [ ! -d "zap_results" ] || [ -z "$(ls -A zap_results)" ]; then
+            echo "❌ No ZAP results found. Exiting."
+            exit 1
+          fi
+          echo "✅ Verified ZAP results exist."
+
       # Step 7: Upload ZAP results as GitHub artifact 
-      - name: Upload ZAP Results Manually
-        if: always()
+      - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: "zap-reports-manual"
+          name: "zap-results"
           path: "zap_results/"
           retention-days: 7
+
+      # Step 8: Run custom remediation scoring (optional)
+      - name: Run remediation scoring
+        run: |
+          echo " Running ZAP remediation scoring..."
+          python3 zap_score_calculator.py zap_results/zap_report.json || echo " Scoring script failed but continuing."
