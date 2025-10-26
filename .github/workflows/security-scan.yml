@@ -33,26 +33,21 @@ jobs:
             echo "Still waiting..."; sleep 2
           done
 
-      # Step 4: Run OWASP ZAP Baseline Scan (fixed permission + reliable artifact generation)
+      # Step 4: Run OWASP ZAP Baseline Scan (fixed Docker command)
       - name: Run OWASP ZAP Baseline Scan
         run: |
           echo "⚡ Starting OWASP ZAP Baseline Scan..."
           mkdir -p zap_results
           sudo chmod -R 777 zap_results   # ✅ ensure full write access
           
-          docker run --rm \
-            --network host \
-            -u 0 \                         # ✅ run as root inside container
-            -v "$(pwd)/zap_results:/zap/wrk/" \
+          docker run --rm --network host -u 0 \
+            -v "$(pwd)/zap_results:/zap/wrk" \
             ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-              -t http://localhost:8080 \
-              -a \
-              -r zap_report.html \
-              -J zap_report.json
+            zap-baseline.py -t http://localhost:8080 -a \
+            -r zap_report.html -J zap_report.json
 
           echo "✅ ZAP scan completed successfully. Reports saved in zap_results/"
-
+          
       # Step 5: Verify that ZAP reports exist
       - name: Verify ZAP Reports
         run: |
