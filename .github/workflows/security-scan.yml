@@ -42,6 +42,7 @@ jobs:
         run: |
           echo "⚡ Starting OWASP ZAP Baseline Scan..."
           mkdir -p zap_results
+          chmod -R 777 zap_results    # ✅ Fix permissions before mounting
           docker run --rm \
             --network host \
             -v "$(pwd)/zap_results:/zap/wrk/" \
@@ -52,6 +53,7 @@ jobs:
               -r zap_report.html \
               -J zap_report.json
           echo "✅ ZAP scan completed successfully."
+
 
       # Step 6: Verify reports exist
       - name: Verify ZAP results
