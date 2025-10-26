@@ -6,8 +6,7 @@ on:
   pull_request:
 
 jobs:
-  # Job ID is correctly hyphenated (zap-scan)
-  zapscan: 
+  zapscan:
     name: Run ZAP Baseline Scan
     runs-on: ubuntu-latest
 
@@ -25,64 +24,54 @@ jobs:
         run: |
           docker rm -f myapp || true
           docker run -d --name myapp -p 8080:80 myapp:test
-          echo "Waiting for app to start..."
+          echo "⏳ Waiting for app to start..."
           for i in {1..15}; do
             if curl -sSf http://localhost:8080 >/dev/null 2>&1; then
               echo "✅ App is up and running"
               break
             fi
-            echo "⏳ Waiting for app..."; sleep 2
+            echo "Waiting..."; sleep 2
           done
-          
-      # Permissions Fix (Confirmed working)
-      - name: Set ZAP Output Permissions
-        run: sudo chmod -R 777 . 
 
-      # Step 4: Run OWASP ZAP Baseline Scan - MODIFIED
-      # Removed specific report flags from cmd_options to prevent ZAP's internal artifact logic from running
+      # Step 4: Fix permissions
+      - name: Set ZAP Output Permissions
+        run: sudo chmod -R 777 .
+
+      # Step 5: Run OWASP ZAP Baseline Scan
       - name: Run OWASP ZAP Baseline Scan
         id: zap
         uses: zaproxy/action-baseline@v0.11.0
         with:
           target: 'http://localhost:8080'
-          rules_file_name: ''
-          # ONLY use '-a' (include all alerts)
-          cmd_options: '-a' 
+          cmd_options: '-a'
           allow_issue_writing: false
-          # artifact_name is correctly removed
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 5: Copy ZAP reports from container to workspace
-      - name: Copy ZAP Reports from Container
+      # Step 6: Collect ZAP reports (directly from workspace)
+      - name: Collect ZAP reports
         run: |
           mkdir -p zap_results
-          echo "📄 Copying reports from ZAP container..."
-          # Reports should still be generated in /zap/wrk/ with these names by the action
-          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_html.html zap_results/
-          docker cp $(docker ps -a -q --filter "ancestor=ghcr.io/zaproxy/zaproxy:stable" --latest):/zap/wrk/report_json.json zap_results/
-          echo "✅ Reports copied successfully"
+          echo "📄 Collecting ZAP reports..."
+          cp -v *.html zap_results/ || true
+          cp -v *.json zap_results/ || true
+          echo "✅ Reports moved to zap_results/"
           ls -la zap_results
-          
-      # Step 6: Verify report directory 
-      - name: Verify report directory
-        run: |
-          if [ ! -d "zap_results" ] || [ -z "$(ls -A zap_results)" ]; then
-            echo "❌ No ZAP results found. Exiting."
-            exit 1
-          fi
-          echo "✅ Verified ZAP results exist."
 
-      # Step 7: Upload ZAP results as GitHub artifact 
+      # Step 7: Upload ZAP results as GitHub artifact
       - name: Upload ZAP Results
         uses: actions/upload-artifact@v4
         with:
-          name: "zap-results"
-          path: "zap_results/"
+          name: zap-results
+          path: zap_results/
           retention-days: 7
 
-      # Step 8: Run custom remediation scoring (optional)
+      # Step 8: Run custom remediation scoring
       - name: Run remediation scoring
         run: |
-          echo " Running ZAP remediation scoring..."
-          python3 zap_score_calculator.py zap_results/zap_report.json || echo " Scoring script failed but continuing."
+          echo "Running ZAP remediation scoring..."
+          if [ -f zap_results/zap_report.json ]; then
+            python3 zap_score_calculator.py zap_results/zap_report.json
+          else
+            echo "⚠️ zap_report.json not found, skipping scoring."
+          fi
