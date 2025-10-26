@@ -43,10 +43,13 @@ jobs:
         uses: zaproxy/action-baseline@v0.11.0
         with:
           target: 'http://localhost:8080'
+          rules_file_name: ''
           cmd_options: '-a'
           allow_issue_writing: false
+          artifact_name: zap-scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
       # Step 6: Collect ZAP reports (directly from workspace)
       - name: Collect ZAP reports
